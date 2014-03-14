@@ -1,0 +1,10 @@
+Debug
+Release
+*.opensdf
+*.sdf
+*.user
+ipch
+*.suo
+out.txt
+*.pdb
+
