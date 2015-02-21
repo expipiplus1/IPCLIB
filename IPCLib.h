@@ -20,6 +20,10 @@
 #ifndef __IPCLIB_H__
 #define __IPCLIB_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct _IPC_STREAM IPC_STREAM;
 
 HRESULT CreateInterprocessStream(
@@ -46,5 +50,10 @@ HRESULT ReadInterprocessStream(
 
 HRESULT CloseInterprocessStream(
     _In_ IPC_STREAM* pIPC );
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
