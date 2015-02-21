@@ -1,5 +1,5 @@
 /*
-	Copyright (C) 2013 Peter J. B. Lewis
+	Copyright (C) 2015 Peter J. B. Lewis
 
     Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
     and associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -15,49 +15,36 @@
     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
     DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-
-
-    This IPC implementation works well for _local_ interprocess communication. If you want to do it
-    over a network you should probably look at rolling your own.
 */
 
-#pragma once
+#ifndef __IPCLIB_H__
+#define __IPCLIB_H__
 
-#include <sal.h>
+typedef struct _IPC_STREAM IPC_STREAM;
 
-typedef struct IPC_INTERNAL* IPC_HANDLE;
+HRESULT CreateInterprocessStream(
+    _In_z_ LPCWSTR szName,
+    _In_ UINT uRingBufferSize,
+    _Out_ IPC_STREAM** ppIPC );
 
-/*
-    Functions for managing IPC handles
-*/
-BOOL IPC_Exists(
-    _In_z_ LPCTSTR szIpcName);
+HRESULT QueryInterprocessStreamIsOpen(
+	_In_z_ LPCWSTR );
 
-BOOL IPC_Create(
-    _In_z_ LPCTSTR szIpcName, 
-    _Out_ IPC_HANDLE* ppIpcHandle);
+HRESULT OpenInterprocessStream(
+    _In_z_ LPCWSTR szName,
+    _Out_ IPC_STREAM** ppIPC );
 
-BOOL IPC_Open(
-    _In_z_ LPCTSTR szIpcName, 
-    _Out_ IPC_HANDLE* ppIpcHandle);
+HRESULT WriteInterprocessStream(
+    _In_ IPC_STREAM* pIPC,
+    _In_reads_(dataSize) LPCVOID pData,
+    _In_ UINT dataSize );
 
-void IPC_Close(
-    _In_ IPC_HANDLE pIpcHandle);
+HRESULT ReadInterprocessStream(
+    _In_ IPC_STREAM* pIPC,
+    _Out_writes_(*pDataSize) LPVOID pData,
+    _Out_ UINT dataSize );
 
-/*
-    Functions for managing the data in an IPC handle
-*/
+HRESULT CloseInterprocessStream(
+    _In_ IPC_STREAM* pIPC );
 
-LPVOID IPC_MapMemory(
-    _In_ IPC_HANDLE pIpcHandle,
-    _In_ DWORD dwAccess, /* See MSDN FILE_MAP enum: http://msdn.microsoft.com/en-us/library/windows/desktop/aa366559(v=vs.85).aspx */
-    _In_ SIZE_T nSize );
-
-void IPC_UnmapMemory(
-    _In_ LPVOID pMemory );
-
-/* Call this to notify waiting clients that something changed. */
-BOOL IPC_SyncClients(
-    _In_ IPC_HANDLE pIpcHandle );
-
+#endif
