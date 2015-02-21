@@ -1,10 +1,9 @@
 Debug
 Release
+ipch
 *.opensdf
 *.sdf
 *.user
-ipch
 *.suo
-out.txt
 *.pdb
 
