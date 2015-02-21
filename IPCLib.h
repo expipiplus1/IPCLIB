@@ -24,19 +24,24 @@
 extern "C" {
 #endif
 
+#define IPCLIB_VERSION MAKELONG(1, 0)
+
 typedef struct _IPC_STREAM IPC_STREAM;
 
 HRESULT CreateInterprocessStream(
     _In_z_ LPCWSTR szName,
+	_In_ DWORD dwVersion,
     _In_ UINT uRingBufferSize,
     _Out_ IPC_STREAM** ppIPC );
 
-BOOL QueryInterprocessStreamIsOpen(
-	_In_z_ LPCWSTR szName );
-
 HRESULT OpenInterprocessStream(
     _In_z_ LPCWSTR szName,
+	_In_ DWORD dwVersion,
     _Out_ IPC_STREAM** ppIPC );
+
+BOOL QueryInterprocessStreamIsOpen(
+	_In_z_ LPCWSTR szName,
+	_In_ DWORD dwVersion );
 
 HRESULT WriteInterprocessStream(
     _In_ IPC_STREAM* pIPC,

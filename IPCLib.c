@@ -19,6 +19,7 @@
 
 #include <Windows.h>
 #include <memory.h>
+#include <stdio.h>
 
 #ifdef _DEBUG
 #	include <assert.h>
@@ -34,6 +35,7 @@ typedef struct _IPC_RING
     volatile UINT64 WriteCursor;
     volatile UINT64 ReadCursor;
     volatile UINT   RingBufferSize;
+	volatile DWORD  dwVersion;
 } IPC_RING;
 
 struct _IPC_STREAM
@@ -56,26 +58,60 @@ struct _IPC_STREAM
     BOOL			bIsServer;
 };
 
-LPWSTR JoinString(
-    LPCWSTR szPrefix,
-    LPCWSTR szSuffix )
+typedef enum _IPC_HANDLE_TYPE
 {
-    SIZE_T aLen = wcslen( szPrefix );
-    SIZE_T bLen = wcslen( szSuffix );
-    SIZE_T totalLen = aLen + bLen + 1;
+	IPC_WRITE_LOCK,
+	IPC_WRITE_EVENT,
+	IPC_READ_LOCK,
+	IPC_READ_EVENT,
+	IPC_MAPPED_FILE
+} IPC_HANDLE_TYPE; 
 
-    WCHAR* newStr = (WCHAR*) malloc(sizeof(WCHAR) * totalLen);
+LPWSTR CreateGlobalObjectName(
+    LPCWSTR szPrefix,
+    IPC_HANDLE_TYPE Type,
+	DWORD dwVersion )
+{
+	SIZE_T aLen, bLen, totalLen;
+	WCHAR* newStr;
+	LPCWSTR szSuffix = NULL;
+
+	switch ( Type )
+	{
+	case IPC_WRITE_LOCK:	szSuffix = L"_WriteLock_"; break;
+	case IPC_WRITE_EVENT:	szSuffix = L"_WriteEvent_"; break;
+	case IPC_READ_LOCK:		szSuffix = L"_ReadLock_"; break;
+	case IPC_READ_EVENT:	szSuffix = L"_ReadEvent_"; break;
+	case IPC_MAPPED_FILE:	szSuffix = L"_MappedFile_"; break;
+	default:				
+#ifdef _DEBUG
+		assert(0 && "Invalid type specified.");
+#endif
+		break; // deliberately crash
+	}
+
+    aLen = wcslen( szPrefix );
+    bLen = wcslen( szSuffix );
+    totalLen = aLen + bLen + 9; // sizeof(DWORD) + nullterm
+
+    newStr = (WCHAR*) malloc(sizeof(WCHAR) * totalLen);
     if ( newStr == NULL )
         return NULL;
     
-    wcscpy_s( newStr, totalLen, szPrefix );
-    wcscat_s( newStr, totalLen, szSuffix );
+	swprintf_s( newStr, totalLen, L"%s%s%08X", szPrefix, szSuffix, dwVersion );
 
     return newStr;
 }
 
+void FreeGlobalObjectName(
+    LPWSTR szName )
+{
+	free( szName );
+}
+
 HRESULT CreateInterprocessStream(
     LPCWSTR szName,
+	DWORD dwVersion,
     UINT uRingBufferSize,
     IPC_STREAM** ppIPC )
 {
@@ -89,6 +125,8 @@ HRESULT CreateInterprocessStream(
         return E_INVALIDARG;
     if ( szName == NULL || *szName == 0 )
         return E_INVALIDARG;
+	if ( dwVersion != IPCLIB_VERSION )
+		return E_INVALIDARG;
 
 	// Make sure we can do at least two writes to the buffer
 	uRingBufferSize = max( uRingBufferSize, IPC_IO_GRANULARITY * 2 );
@@ -96,11 +134,11 @@ HRESULT CreateInterprocessStream(
     pIPC = (IPC_STREAM*) malloc( sizeof(IPC_STREAM) );
     ZeroMemory( pIPC, sizeof(pIPC) );
 
-    pIPC->WriteLockName = JoinString( szName, L"_writelock" );
-    pIPC->WriteEventName = JoinString( szName, L"_write" );
-    pIPC->ReadLockName = JoinString( szName, L"_readlock" );
-    pIPC->ReadEventName = JoinString( szName, L"_read" );
-    pIPC->MappedFileName = JoinString( szName, L"_mmap" );
+    pIPC->WriteLockName = CreateGlobalObjectName( szName, IPC_WRITE_LOCK, dwVersion );
+    pIPC->WriteEventName = CreateGlobalObjectName( szName, IPC_WRITE_EVENT, dwVersion );
+    pIPC->ReadLockName = CreateGlobalObjectName( szName, IPC_READ_LOCK, dwVersion );
+    pIPC->ReadEventName = CreateGlobalObjectName( szName, IPC_READ_EVENT, dwVersion );
+    pIPC->MappedFileName = CreateGlobalObjectName( szName, IPC_MAPPED_FILE, dwVersion );
 
 	sa.bInheritHandle = FALSE;
 	sa.lpSecurityDescriptor = NULL;
@@ -178,8 +216,19 @@ HRESULT CreateInterprocessStream(
 		return HRESULT_FROM_WIN32( GetLastError() );
 	}
 
-    ZeroMemory( pIPC->pRing, uTotalBufferSize );
-    pIPC->pRing->RingBufferSize = uRingBufferSize;
+	__try
+	{
+		ZeroMemory( pIPC->pRing, uTotalBufferSize );
+		pIPC->pRing->RingBufferSize = uRingBufferSize;
+		pIPC->pRing->dwVersion = dwVersion;
+	}
+	__except( GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR ?
+		EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
+	{
+        CloseInterprocessStream( pIPC );
+		return E_FAIL;
+	}
+
     pIPC->pBuffer = ( (BYTE*) pIPC->pRing ) + sizeof(IPC_RING);
     pIPC->IOGranularity = IPC_IO_GRANULARITY;
     pIPC->MappedFileSize = uTotalBufferSize;
@@ -192,6 +241,7 @@ HRESULT CreateInterprocessStream(
 
 HRESULT OpenInterprocessStream(
     LPCWSTR szName,
+	DWORD dwVersion,
     IPC_STREAM** ppIPC )
 {
 	IPC_STREAM* pIPC = NULL;
@@ -201,15 +251,17 @@ HRESULT OpenInterprocessStream(
         return E_INVALIDARG;
     if ( szName == NULL || *szName == 0 )
         return E_INVALIDARG;
+	if ( dwVersion != IPCLIB_VERSION )
+		return E_INVALIDARG;
 
     pIPC = (IPC_STREAM*) malloc( sizeof(IPC_STREAM) );
     ZeroMemory( pIPC, sizeof(pIPC) );
 
-    pIPC->WriteLockName = JoinString( szName, L"_writelock" );
-    pIPC->WriteEventName = JoinString( szName, L"_write" );
-    pIPC->ReadLockName = JoinString( szName, L"_readlock" );
-    pIPC->ReadEventName = JoinString( szName, L"_read" );
-    pIPC->MappedFileName = JoinString( szName, L"_mmap" );
+    pIPC->WriteLockName = CreateGlobalObjectName( szName, IPC_WRITE_LOCK, dwVersion );
+    pIPC->WriteEventName = CreateGlobalObjectName( szName, IPC_WRITE_EVENT, dwVersion );
+    pIPC->ReadLockName = CreateGlobalObjectName( szName, IPC_READ_LOCK, dwVersion );
+    pIPC->ReadEventName = CreateGlobalObjectName( szName, IPC_READ_EVENT, dwVersion );
+    pIPC->MappedFileName = CreateGlobalObjectName( szName, IPC_MAPPED_FILE, dwVersion );
 
 	pIPC->hWriteLock = OpenMutex(
 		SYNCHRONIZE,
@@ -276,6 +328,13 @@ HRESULT OpenInterprocessStream(
 	__try
 	{
         pIPC->RingBufferSize = pTmpRing->RingBufferSize;
+
+		// Check the versions match
+		if ( pTmpRing->dwVersion != dwVersion )
+		{
+			CloseInterprocessStream( pIPC );
+			return E_INVALIDARG;
+		}
 	}
 	__except(GetExceptionCode()==EXCEPTION_IN_PAGE_ERROR ?
 	EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
@@ -307,16 +366,18 @@ HRESULT OpenInterprocessStream(
     return S_OK;
 }
 
-BOOL QueryInterprocessStreamIsOpen( LPCWSTR szName )
+BOOL QueryInterprocessStreamIsOpen( 
+	LPCWSTR szName,
+	DWORD dwVersion )
 {
-    LPWSTR MappedFileName = JoinString( szName, L"_mmap" );
+    LPWSTR MappedFileName = CreateGlobalObjectName( szName, IPC_MAPPED_FILE, dwVersion );
 
 	HANDLE hMappedFile = OpenFileMapping(
 		FILE_MAP_WRITE | FILE_MAP_READ,
 		FALSE,
 		MappedFileName );
 
-    free( MappedFileName );
+    FreeGlobalObjectName( MappedFileName );
 
 	if ( !hMappedFile )
 	{
@@ -352,15 +413,15 @@ HRESULT CloseInterprocessStream( IPC_STREAM* pIPC )
         UnmapViewOfFile( pIPC->pRing );
 
     if ( pIPC->WriteLockName != NULL )
-        free( pIPC->WriteLockName );
+        FreeGlobalObjectName( pIPC->WriteLockName );
     if ( pIPC->WriteEventName != NULL )
-        free( pIPC->WriteEventName );
+        FreeGlobalObjectName( pIPC->WriteEventName );
     if ( pIPC->ReadLockName != NULL )
-        free( pIPC->ReadLockName );
+        FreeGlobalObjectName( pIPC->ReadLockName );
     if ( pIPC->ReadEventName != NULL )
-        free( pIPC->ReadEventName );
+        FreeGlobalObjectName( pIPC->ReadEventName );
     if ( pIPC->MappedFileName != NULL )
-        free( pIPC->MappedFileName );
+        FreeGlobalObjectName( pIPC->MappedFileName );
 
     if ( pIPC->hWriteEvent != NULL )
         CloseHandle( pIPC->hWriteEvent );

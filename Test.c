@@ -55,9 +55,9 @@ int ProducerThread( DWORD_PTR index )
 
 	SetThreadAffinityMask( GetCurrentThread(), (DWORD_PTR) ( 1UL << index ) );
 
-	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
+	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME, IPCLIB_VERSION ) );
 
-    OpenInterprocessStream( TEST_APP_NAME, &pIPC);
+    OpenInterprocessStream( TEST_APP_NAME, IPCLIB_VERSION, &pIPC );
     
     for (i = 0; i < NUM_TESTS; ++i)
     {
@@ -102,9 +102,9 @@ int ConsumerThread( DWORD_PTR index )
 
 	SetThreadAffinityMask( GetCurrentThread(), (DWORD_PTR) ( 1UL << index ) );
 
-	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
+	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME, IPCLIB_VERSION ) );
 
-    OpenInterprocessStream( TEST_APP_NAME, &pIPC);
+    OpenInterprocessStream( TEST_APP_NAME, IPCLIB_VERSION, &pIPC );
     
     for (i = 0; i < NUM_TESTS; ++i)
     {
@@ -143,11 +143,11 @@ int main(int argc, char** argv)
 {
     IPC_STREAM* pIPC = NULL;
 
-	assert( !QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
+	assert( !QueryInterprocessStreamIsOpen( TEST_APP_NAME, IPCLIB_VERSION ) );
 
-    CreateInterprocessStream( TEST_APP_NAME, RINGBUFFER_SIZE, &pIPC );
+    CreateInterprocessStream( TEST_APP_NAME, IPCLIB_VERSION, RINGBUFFER_SIZE, &pIPC );
 
-	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
+	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME, IPCLIB_VERSION ) );
 
 	{
 		HANDLE hThreads[] = { 
