@@ -473,6 +473,10 @@ static UINT64 ReadSpinlock(
         WaitForSingleObject( pIPC->hWriteEvent, INFINITE );
     }
 
+#ifdef _DEBUG
+	assert( pIPC->pRing->ReadCursor <= pIPC->pRing->WriteCursor );
+#endif
+
     return pIPC->pRing->WriteCursor;
 }
 

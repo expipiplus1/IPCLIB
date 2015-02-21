@@ -19,13 +19,20 @@
 
 #include <Windows.h>
 #include <stdio.h>
-#include <assert.h>
+
+#ifdef _DEBUG
+#	include <assert.h>
+#endif
 
 #include "IPCLib.h"
 
 #define NUM_TESTS 1048576
 #define MAX_STRING_LEN 1024
 static const WCHAR TESTCHARS[] = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+#ifndef assert
+#	define assert(x) { if (!(x)) DebugBreak(); }
+#endif
 
 typedef struct _PRODUCER_PACKET
 {
@@ -75,28 +82,27 @@ int ProducerThread( DWORD_PTR index )
     return 0;
 }
 
-void StartProducerThread(UINT index)
+HANDLE StartProducerThread(UINT index)
 {
-    CreateThread( NULL, 0, (LPTHREAD_START_ROUTINE) ProducerThread, (LPVOID) index, 0, NULL );
+    return CreateThread( NULL, 0, (LPTHREAD_START_ROUTINE) ProducerThread, (LPVOID) index, 0, NULL );
 }
 
-int main(int argc, char** argv)
+int ConsumerThread( DWORD_PTR index )
 {
     IPC_STREAM* pIPC = NULL;
 	UINT i, j, len, checksum;
 	WCHAR debug[256 + MAX_STRING_LEN];
     WCHAR t[256 + MAX_STRING_LEN];
 
-    CreateInterprocessStream( L"AWHKTEST", 1024, &pIPC );
+	SetThreadAffinityMask( GetCurrentThread(), (DWORD_PTR) ( 1UL << index ) );
 
-	StartProducerThread( 0 );
-	StartProducerThread( 1 );
-	StartProducerThread( 2 );
-	StartProducerThread( 3 );
-
+    OpenInterprocessStream( L"AWHKTEST", &pIPC);
+    
     for (i = 0; i < NUM_TESTS; ++i)
     {
         ReadInterprocessStream( pIPC, &len, sizeof(len) );
+		assert( len <= _countof(t) );
+
         ReadInterprocessStream( pIPC, &checksum, sizeof(checksum) );
         ReadInterprocessStream( pIPC, t, len * sizeof(WCHAR) );
 
@@ -114,6 +120,34 @@ int main(int argc, char** argv)
 
         wprintf( t );
     }
+
+    CloseInterprocessStream(pIPC);
+	
+	return 0;
+}
+
+HANDLE StartConsumerThread(UINT index)
+{
+    return CreateThread( NULL, 0, (LPTHREAD_START_ROUTINE) ConsumerThread, (LPVOID) index, 0, NULL );
+}
+
+int main(int argc, char** argv)
+{
+    IPC_STREAM* pIPC = NULL;
+    CreateInterprocessStream( L"AWHKTEST", 1024, &pIPC );
+
+	{
+		HANDLE hThreads[] = { 
+			StartProducerThread( 0 ),
+			StartProducerThread( 1 ),
+			StartProducerThread( 2 ),
+			StartProducerThread( 3 ),
+
+			StartConsumerThread( 4 )
+		};
+
+		WaitForMultipleObjects( _countof(hThreads), hThreads, TRUE, INFINITE );
+	}
 
     CloseInterprocessStream(pIPC);
 	
