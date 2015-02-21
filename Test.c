@@ -27,46 +27,72 @@
 #define MAX_STRING_LEN 1024
 static const WCHAR TESTCHARS[] = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-int test(void* poo)
+typedef struct _PRODUCER_PACKET
 {
-    WCHAR tmp[MAX_STRING_LEN];
+	DWORD dwLength;
+	DWORD dwCheckSum;
+} PRODUCER_PACKET;
+
+int ProducerThread( DWORD_PTR index )
+{
+	WCHAR debug[256 + MAX_STRING_LEN];
+    WCHAR _tmp[sizeof(PRODUCER_PACKET) + MAX_STRING_LEN + 256];
+	PRODUCER_PACKET* pPacket = (PRODUCER_PACKET*) _tmp;
+	WCHAR* pPayload = (WCHAR*)( pPacket + 1 );
     IPC_STREAM* pIPC = NULL;
-	UINT i, j;
+	DWORD i, j, offset;
+
+	SetThreadAffinityMask( GetCurrentThread(), (DWORD_PTR) ( 1UL << index ) );
 
     OpenInterprocessStream( L"AWHKTEST", &pIPC);
     
     for (i = 0; i < NUM_TESTS; ++i)
     {
-		UINT checksum = 0;
-		UINT len = 12 + rand() % (_countof(tmp) - 12);
-        UINT offset = swprintf_s( tmp, _countof(tmp), L" [%d] ", i );
-		for (j = offset; j < len; ++j) 
+		UINT len = rand() % MAX_STRING_LEN;
+        offset = swprintf_s( pPayload, MAX_STRING_LEN, L" [%d, %d, %d] ", index, i, len );
+		for (j = offset; j < offset+len; ++j) 
 		{
-			tmp[j] = TESTCHARS[rand() % _countof(TESTCHARS)];
+			pPayload[j] = TESTCHARS[rand() % (_countof(TESTCHARS)-1)];
+			assert(isprint(pPayload[j]));
 		}
 
-		for (j = 0; j < len; ++j) 
+		pPayload[j] = 0;
+		pPacket->dwLength = j;
+
+		pPacket->dwCheckSum = 0;
+		for (j = 0; j < offset+len; ++j) 
 		{
-			checksum += tmp[j];
+			pPacket->dwCheckSum += pPayload[j];
 		}
 
-        WriteInterprocessStream( pIPC, &len, sizeof(UINT) );
-        WriteInterprocessStream( pIPC, &checksum, sizeof(UINT) );
-        WriteInterprocessStream( pIPC, tmp, len * sizeof(WCHAR) );
+        WriteInterprocessStream( pIPC, pPacket, sizeof(PRODUCER_PACKET) + pPacket->dwLength * sizeof(WCHAR) );
+
+		swprintf_s( debug, _countof(debug), L"Thread %d producing %d characters (checksum %X): %s\n", index, pPacket->dwLength, pPacket->dwCheckSum, pPayload );
+		OutputDebugStringW( debug );
     }
 
     CloseInterprocessStream(pIPC);
     return 0;
 }
 
+void StartProducerThread(UINT index)
+{
+    CreateThread( NULL, 0, (LPTHREAD_START_ROUTINE) ProducerThread, (LPVOID) index, 0, NULL );
+}
+
 int main(int argc, char** argv)
 {
     IPC_STREAM* pIPC = NULL;
 	UINT i, j, len, checksum;
-    WCHAR t[MAX_STRING_LEN];
+	WCHAR debug[256 + MAX_STRING_LEN];
+    WCHAR t[256 + MAX_STRING_LEN];
 
     CreateInterprocessStream( L"AWHKTEST", 1024, &pIPC );
-    CreateThread( NULL, 0, (LPTHREAD_START_ROUTINE) test, NULL, 0, NULL );
+
+	StartProducerThread( 0 );
+	StartProducerThread( 1 );
+	StartProducerThread( 2 );
+	StartProducerThread( 3 );
 
     for (i = 0; i < NUM_TESTS; ++i)
     {
@@ -76,12 +102,16 @@ int main(int argc, char** argv)
 
  		for (j = 0; j < len; ++j) 
 		{
+			assert(isprint(t[j]));
 			checksum -= t[j];
 		}
 
+        t[len] = 0;
+		swprintf_s( debug, _countof(debug), L"Consuming %d characters (checksum %X): %s\n", len, checksum, t );
+		OutputDebugStringW( debug );
+
 		assert(checksum == 0);
 
-        t[len] = 0;
         wprintf( t );
     }
 

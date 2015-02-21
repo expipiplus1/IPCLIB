@@ -34,7 +34,6 @@ typedef struct _IPC_RING
     volatile UINT64 WriteCursor;
     volatile UINT64 ReadCursor;
     volatile UINT   RingBufferSize;
-    volatile UINT   Count;
 } IPC_RING;
 
 struct _IPC_STREAM
@@ -46,7 +45,6 @@ struct _IPC_STREAM
     LPWSTR			ReadEventName;
     IPC_RING*		pRing;
     BYTE*			pBuffer;
-    BYTE*			pMessageRing;
     HANDLE			hWriteLock;
     HANDLE			hWriteEvent;
     HANDLE			hReadLock;
@@ -91,6 +89,9 @@ HRESULT CreateInterprocessStream(
         return E_INVALIDARG;
     if ( szName == NULL || *szName == 0 )
         return E_INVALIDARG;
+
+	// Make sure we can do at least two writes to the buffer
+	uRingBufferSize = max( uRingBufferSize, IPC_IO_GRANULARITY * 2 );
 
     pIPC = (IPC_STREAM*) malloc( sizeof(IPC_STREAM) );
     ZeroMemory( pIPC, sizeof(pIPC) );
@@ -179,7 +180,6 @@ HRESULT CreateInterprocessStream(
 
     ZeroMemory( pIPC->pRing, uTotalBufferSize );
     pIPC->pRing->RingBufferSize = uRingBufferSize;
-    pIPC->pRing->Count = 0;
     pIPC->pBuffer = ( (BYTE*) pIPC->pRing ) + sizeof(IPC_RING);
     pIPC->IOGranularity = IPC_IO_GRANULARITY;
     pIPC->MappedFileSize = uTotalBufferSize;
@@ -425,12 +425,15 @@ HRESULT WriteInterprocessStream(
             if ( pDest + packetSize > pRingEnd )
             {
                 SIZE_T splitPoint = pRingEnd - pDest;
+				SIZE_T remainder = packetSize - splitPoint;
                 memcpy( pDest, pSource, splitPoint );
-                memcpy( pIPC->pBuffer, pSource + splitPoint, packetSize - splitPoint );
+                memcpy( pIPC->pBuffer, pSource + splitPoint, remainder );
+				pDest = pIPC->pBuffer + remainder;
             }
             else
             {
-                memcpy( pDest, pData, packetSize );
+                memcpy( pDest, pSource, packetSize );
+				pDest += packetSize;
             }
 
             pSource += packetSize;
@@ -506,12 +509,15 @@ HRESULT ReadInterprocessStream(
             if ( pSrc + available > pBufferEnd )
             {
                 SIZE_T splitPoint = pBufferEnd - pSrc;
+				SIZE_T remainder = available - splitPoint;
                 memcpy( pDest, pSrc, splitPoint );
-                memcpy( pDest + splitPoint, pBuffer, available - splitPoint );
+                memcpy( pDest + splitPoint, pBuffer, remainder );
+				pSrc = pBuffer + remainder;
             }
             else
             {
                 memcpy( pDest, pSrc, available );
+				pSrc += available;
             }
 
             readCursor += available;
