@@ -30,6 +30,8 @@
 #define MAX_STRING_LEN 1024
 #define RINGBUFFER_SIZE 512
 
+#define TEST_APP_NAME L"TESTIPC"
+
 static const WCHAR TESTCHARS[] = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 #ifndef assert
@@ -53,7 +55,9 @@ int ProducerThread( DWORD_PTR index )
 
 	SetThreadAffinityMask( GetCurrentThread(), (DWORD_PTR) ( 1UL << index ) );
 
-    OpenInterprocessStream( L"AWHKTEST", &pIPC);
+	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
+
+    OpenInterprocessStream( TEST_APP_NAME, &pIPC);
     
     for (i = 0; i < NUM_TESTS; ++i)
     {
@@ -98,7 +102,9 @@ int ConsumerThread( DWORD_PTR index )
 
 	SetThreadAffinityMask( GetCurrentThread(), (DWORD_PTR) ( 1UL << index ) );
 
-    OpenInterprocessStream( L"AWHKTEST", &pIPC);
+	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
+
+    OpenInterprocessStream( TEST_APP_NAME, &pIPC);
     
     for (i = 0; i < NUM_TESTS; ++i)
     {
@@ -136,7 +142,12 @@ HANDLE StartConsumerThread(UINT index)
 int main(int argc, char** argv)
 {
     IPC_STREAM* pIPC = NULL;
-    CreateInterprocessStream( L"AWHKTEST", RINGBUFFER_SIZE, &pIPC );
+
+	assert( !QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
+
+    CreateInterprocessStream( TEST_APP_NAME, RINGBUFFER_SIZE, &pIPC );
+
+	assert( QueryInterprocessStreamIsOpen( TEST_APP_NAME ) );
 
 	{
 		HANDLE hThreads[] = { 

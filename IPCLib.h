@@ -31,8 +31,8 @@ HRESULT CreateInterprocessStream(
     _In_ UINT uRingBufferSize,
     _Out_ IPC_STREAM** ppIPC );
 
-HRESULT QueryInterprocessStreamIsOpen(
-	_In_z_ LPCWSTR );
+BOOL QueryInterprocessStreamIsOpen(
+	_In_z_ LPCWSTR szName );
 
 HRESULT OpenInterprocessStream(
     _In_z_ LPCWSTR szName,

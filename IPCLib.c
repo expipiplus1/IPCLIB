@@ -307,6 +307,26 @@ HRESULT OpenInterprocessStream(
     return S_OK;
 }
 
+BOOL QueryInterprocessStreamIsOpen( LPCWSTR szName )
+{
+    LPWSTR MappedFileName = JoinString( szName, L"_mmap" );
+
+	HANDLE hMappedFile = OpenFileMapping(
+		FILE_MAP_WRITE | FILE_MAP_READ,
+		FALSE,
+		MappedFileName );
+
+    free( MappedFileName );
+
+	if ( !hMappedFile )
+	{
+		return FALSE;
+	}
+
+	CloseHandle( hMappedFile );
+	return TRUE;
+}
+
 HRESULT CloseInterprocessStream( IPC_STREAM* pIPC )
 {
     if ( pIPC == NULL )
