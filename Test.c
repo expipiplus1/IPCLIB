@@ -28,6 +28,8 @@
 
 #define NUM_TESTS 1048576
 #define MAX_STRING_LEN 1024
+#define RINGBUFFER_SIZE 512
+
 static const WCHAR TESTCHARS[] = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 #ifndef assert
@@ -134,7 +136,7 @@ HANDLE StartConsumerThread(UINT index)
 int main(int argc, char** argv)
 {
     IPC_STREAM* pIPC = NULL;
-    CreateInterprocessStream( L"AWHKTEST", 1024, &pIPC );
+    CreateInterprocessStream( L"AWHKTEST", RINGBUFFER_SIZE, &pIPC );
 
 	{
 		HANDLE hThreads[] = { 
