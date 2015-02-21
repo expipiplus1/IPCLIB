@@ -132,7 +132,7 @@ HRESULT CreateInterprocessStream(
 	uRingBufferSize = max( uRingBufferSize, IPC_IO_GRANULARITY * 2 );
 
     pIPC = (IPC_STREAM*) malloc( sizeof(IPC_STREAM) );
-    ZeroMemory( pIPC, sizeof(pIPC) );
+    ZeroMemory( pIPC, sizeof(*pIPC) );
 
     pIPC->WriteLockName = CreateGlobalObjectName( szName, IPC_WRITE_LOCK, dwVersion );
     pIPC->WriteEventName = CreateGlobalObjectName( szName, IPC_WRITE_EVENT, dwVersion );
@@ -255,7 +255,7 @@ HRESULT OpenInterprocessStream(
 		return E_INVALIDARG;
 
     pIPC = (IPC_STREAM*) malloc( sizeof(IPC_STREAM) );
-    ZeroMemory( pIPC, sizeof(pIPC) );
+    ZeroMemory( pIPC, sizeof(*pIPC) );
 
     pIPC->WriteLockName = CreateGlobalObjectName( szName, IPC_WRITE_LOCK, dwVersion );
     pIPC->WriteEventName = CreateGlobalObjectName( szName, IPC_WRITE_EVENT, dwVersion );
