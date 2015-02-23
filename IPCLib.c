@@ -469,7 +469,6 @@ HRESULT WriteInterprocessStream(
     _In_reads_(dataSize) LPCVOID pData,
     _In_ UINT dataSize )
 {
-	UINT numPackets;
 	UINT ringBufferSize;
 	const BYTE* pSource = NULL;
 	const BYTE* pRingEnd = NULL;
@@ -481,10 +480,9 @@ HRESULT WriteInterprocessStream(
         return S_OK;
     }
 
-    numPackets = ( dataSize + pIPC->IOGranularity - 1 ) / pIPC->IOGranularity;
     ringBufferSize = pIPC->RingBufferSize;
     pSource = (const BYTE*) pData;
-    pRingEnd = pIPC->pBuffer + pIPC->RingBufferSize;
+    pRingEnd = pIPC->pBuffer + ringBufferSize;
     
     // Lock the ring
     WaitForSingleObject( pIPC->hWriteLock, INFINITE );
@@ -493,7 +491,7 @@ HRESULT WriteInterprocessStream(
 	__try
 	{
 		UINT64 writeCursor = pIPC->pRing->WriteCursor;
-        BYTE* pDest = pIPC->pBuffer + ( writeCursor % pIPC->RingBufferSize );
+        BYTE* pDest = pIPC->pBuffer + ( writeCursor % ringBufferSize );
 
         while ( dataSize > 0 )
         {
